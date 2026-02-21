@@ -1,14 +1,3 @@
-"""
-utils/security.py
-Gestion segura de credenciales con cifrado Fernet + bcrypt para hashing.
-
-Cambios de seguridad (CodeQL py/weak-sensitive-data-hashing):
-  - SHA-256 reemplazado por bcrypt para hashing de contrasenas.
-  - bcrypt es lento por diseno (factor de costo configurable),
-    incluye sal unica por contrasena y es resistente a fuerza bruta.
-  - SHA-256 se mantiene SOLO para datos no sensibles (checksums, IDs).
-"""
-
 import json
 import base64
 from pathlib import Path
