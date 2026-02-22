@@ -9,7 +9,6 @@ on:
     # Ejecuta todos los lunes a las 03:00 UTC
     - cron: '0 3 * * 1'
   workflow_dispatch:
-    # Permite ejecucion manual desde GitHub Actions
 
 jobs:
   analyze:
@@ -27,15 +26,11 @@ jobs:
       matrix:
         include:
           # ── Escaneo de seguridad (vulnerabilidades criticas) ──────────────
-          - language: python
-            build-mode: none
-            scan-type: "Security"
+          - scan-type: "Security"
             queries: security-extended
 
           # ── Escaneo de calidad (bugs, code smells, mejoras) ───────────────
-          - language: python
-            build-mode: none
-            scan-type: "Quality"
+          - scan-type: "Quality"
             queries: security-and-quality
 
     steps:
@@ -43,7 +38,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # Necesario para analisis de cambios en PRs
+          fetch-depth: 2
 
       # ── 2. Setup Python ────────────────────────────────────────────────────
       - name: Setup Python 3.12
@@ -52,68 +47,108 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      # ── 3. Instalar dependencias ───────────────────────────────────────────
-      # CodeQL analiza mejor el codigo cuando puede resolver los imports reales.
-      # Esto permite detectar vulnerabilidades en dependencias externas tambien.
+      # ── 3. Detectar ruta del proyecto y requirements ───────────────────────
+      # Busca requirements.txt en cualquier subcarpeta del repo para que el
+      # workflow funcione sin importar como este organizado el repositorio.
+      - name: Detect project structure
+        id: detect
+        run: |
+          REQ=$(find . -name "requirements.txt" \
+                  -not -path "*/venv/*" \
+                  -not -path "*/.git/*" \
+                  -not -path "*/dist/*" \
+                  -not -path "*/build/*" \
+                  | head -1)
+
+          if [ -n "$REQ" ]; then
+            echo "requirements=$REQ" >> $GITHUB_OUTPUT
+            echo "found_req=true"    >> $GITHUB_OUTPUT
+            echo "Encontrado: $REQ"
+          else
+            echo "found_req=false"   >> $GITHUB_OUTPUT
+            echo "No se encontro requirements.txt — continuando sin instalar dependencias"
+          fi
+
+          # Listar estructura del repo para debugging
+          echo "--- Estructura del repositorio ---"
+          find . -maxdepth 3 \
+            -not -path "*/.git/*" \
+            -not -path "*/venv/*" \
+            -not -path "*/__pycache__/*" \
+            | sort
+
+      # ── 4. Instalar dependencias ───────────────────────────────────────────
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r vmware_inventory/requirements.txt || true
-          # Instalar dependencias de analisis extra
+
+          # Instalar dependencias del proyecto si se encontro requirements.txt
+          if [ "${{ steps.detect.outputs.found_req }}" = "true" ]; then
+            pip install -r "${{ steps.detect.outputs.requirements }}" || true
+          fi
+
+          # Herramientas de analisis extra
           pip install bandit safety
 
-      # ── 4. Bandit — analisis de seguridad adicional ────────────────────────
-      # Bandit detecta problemas que CodeQL no cubre (ej: assert en prod,
-      # uso de subprocess, hardcoded secrets, etc.)
+      # ── 5. Bandit — analisis de seguridad especifico de Python ────────────
       - name: Run Bandit security scan
         if: matrix.scan-type == 'Security'
         run: |
-          bandit -r vmware_inventory/ \
-            --exclude vmware_inventory/venv,vmware_inventory/build,vmware_inventory/dist \
+          # Excluir venv, dist, build y archivos generados
+          bandit -r . \
+            --exclude ./.git,./venv,./.venv,./dist,./build \
             --severity-level medium \
             --confidence-level medium \
             --format sarif \
             --output bandit-results.sarif || true
 
-      # ── 5. Safety — vulnerabilidades en dependencias ──────────────────────
-      # Compara requirements.txt contra la base de datos de CVEs de PyPI
+          echo "Bandit completado."
+
+      # ── 6. Safety — CVEs en dependencias de PyPI ──────────────────────────
       - name: Run Safety dependency check
         if: matrix.scan-type == 'Security'
         run: |
-          safety check \
-            --file vmware_inventory/requirements.txt \
-            --output text || true
+          if [ "${{ steps.detect.outputs.found_req }}" = "true" ]; then
+            safety check \
+              --file "${{ steps.detect.outputs.requirements }}" \
+              --output text || true
+          else
+            echo "Sin requirements.txt — omitiendo Safety"
+          fi
 
-      # ── 6. Inicializar CodeQL ──────────────────────────────────────────────
+      # ── 7. Inicializar CodeQL ──────────────────────────────────────────────
+      # IMPORTANTE: build-mode: none se define aqui directamente (no en matrix)
+      # para evitar que el bloque config reactive el autobuild en CodeQL v4.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: python
-          build-mode: ${{ matrix.build-mode }}
+          build-mode: none
           queries: ${{ matrix.queries }}
-          # Configuracion adicional para Python
+          # paths-ignore en config evita falsos positivos de venv y archivos generados.
+          # NO se usa "paths:" aqui porque causaba el FileNotFoundError al buscar
+          # la carpeta como punto de entrada del autobuild (linea 1256 del log).
           config: |
-            paths:
-              - vmware_inventory
             paths-ignore:
-              - vmware_inventory/venv
-              - vmware_inventory/build
-              - vmware_inventory/dist
-              - "**/__pycache__"
+              - "**/venv/**"
+              - "**/.venv/**"
+              - "**/dist/**"
+              - "**/build/**"
+              - "**/__pycache__/**"
               - "**/*.pyc"
+              - "**/*.pyo"
             query-filters:
               - exclude:
                   tags contain: experimental
 
-      # ── 7. Ejecutar analisis CodeQL ────────────────────────────────────────
+      # ── 8. Ejecutar analisis CodeQL ────────────────────────────────────────
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:python/scan:${{ matrix.scan-type }}"
-          output: codeql-results
           upload: always
 
-      # ── 8. Subir resultados Bandit a Security tab ──────────────────────────
+      # ── 9. Subir resultados Bandit a pestaña Security ─────────────────────
       - name: Upload Bandit results to GitHub Security
         if: matrix.scan-type == 'Security' && hashFiles('bandit-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
@@ -121,23 +156,23 @@ jobs:
           sarif_file: bandit-results.sarif
           category: "bandit"
 
-      # ── 9. Resumen en el log de Actions ───────────────────────────────────
+      # ── 10. Resumen del job en GitHub Actions ─────────────────────────────
       - name: Generate scan summary
         if: always()
         run: |
           echo "## CodeQL Scan Summary — ${{ matrix.scan-type }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Campo        | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo    | Valor |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Tipo de scan | ${{ matrix.scan-type }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Queries      | ${{ matrix.queries }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rama         | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit       | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trigger      | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Queries  | ${{ matrix.queries }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rama     | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit   | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger  | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Resultados disponibles en la pestaña **Security → Code scanning alerts**" >> $GITHUB_STEP_SUMMARY
+          echo "Resultados en **Security → Code scanning alerts**" >> $GITHUB_STEP_SUMMARY
 
-  # ── Job separado: reporte consolidado post-analisis ──────────────────────────
+  # ── Reporte consolidado post-analisis ─────────────────────────────────────
   security-report:
     name: Security Report
     runs-on: ubuntu-latest
@@ -157,16 +192,16 @@ jobs:
           echo "## Resumen Final de Seguridad" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Herramientas ejecutadas" >> $GITHUB_STEP_SUMMARY
-          echo "| Herramienta | Descripcion | Cobertura |" >> $GITHUB_STEP_SUMMARY
+          echo "| Herramienta     | Descripcion                       | Cobertura          |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| CodeQL Security | Vulnerabilidades OWASP Top 10, CWE | Codigo fuente Python |" >> $GITHUB_STEP_SUMMARY
-          echo "| CodeQL Quality  | Code smells, bugs, malas practicas | Codigo fuente Python |" >> $GITHUB_STEP_SUMMARY
-          echo "| Bandit          | Seguridad especifica de Python | Codigo fuente Python |" >> $GITHUB_STEP_SUMMARY
-          echo "| Safety          | CVEs en dependencias de PyPI | requirements.txt |" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL Security | Vulnerabilidades OWASP Top 10/CWE | Codigo fuente      |" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL Quality  | Bugs y malas practicas            | Codigo fuente      |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bandit          | Seguridad especifica de Python    | Codigo fuente      |" >> $GITHUB_STEP_SUMMARY
+          echo "| Safety          | CVEs en dependencias              | requirements.txt   |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Alertas resueltas" >> $GITHUB_STEP_SUMMARY
-          echo "- CWE-916: SHA-256 reemplazado por bcrypt (credentials.py, security.py)" >> $GITHUB_STEP_SUMMARY
-          echo "- CWE-327: Algoritmo debil de hashing en datos sensibles — corregido" >> $GITHUB_STEP_SUMMARY
-          echo "- CWE-328: Hash sin sal en contrasenas — corregido con bcrypt (sal automatica)" >> $GITHUB_STEP_SUMMARY
+          echo "### Alertas resueltas en este proyecto" >> $GITHUB_STEP_SUMMARY
+          echo "- CWE-916: SHA-256 reemplazado por bcrypt en credentials.py y security.py" >> $GITHUB_STEP_SUMMARY
+          echo "- CWE-327: Algoritmo de hashing debil en datos sensibles — corregido" >> $GITHUB_STEP_SUMMARY
+          echo "- CWE-328: Hash de contrasena sin sal — corregido con bcrypt (sal automatica)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Ver alertas activas en: **Security → Code scanning**" >> $GITHUB_STEP_SUMMARY
