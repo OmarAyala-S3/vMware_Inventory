@@ -10,6 +10,12 @@ from tkinter import Tk, ttk, messagebox, filedialog, BOTH, BOTTOM, BooleanVar, B
 from datetime import datetime
 
 try:
+    from ui.multi_tab import MultiTab
+    MULTI_TAB_AVAILABLE = True
+except ImportError:
+    MULTI_TAB_AVAILABLE = False
+
+try:
     import ttkbootstrap as tbs
     from ttkbootstrap.constants import *
     BOOTSTRAP = True
@@ -357,6 +363,14 @@ class VMwareInventoryApp:
         self.tab_ds       = self._create_tab(self.notebook, "  Datastores  ")
         self.tab_nets     = self._create_tab(self.notebook, "  Redes  ")
         self.tab_log      = self._create_tab(self.notebook, "  Consola  ")
+
+        # Pestaña Multi-Conexión
+        if MULTI_TAB_AVAILABLE:
+            self.tab_multi = MultiTab(
+                self.notebook,
+                log_callback=self._log,
+            )
+            self.notebook.add(self.tab_multi, text="  🌐 Multi-Conexión  ")
 
         # Treeviews
         self.tree_vms    = self._build_treeview(self.tab_vms)
