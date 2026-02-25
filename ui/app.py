@@ -9,8 +9,6 @@ import queue
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
-from typing import Optional, List
-from ui.multi_tab import MultiScanTab
 
 try:
     import ttkbootstrap as tbs
@@ -22,13 +20,11 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ui.multi_tab import MultiScanTab
 from services.vmware_service import VMwareService, VMwareConnectionError
 from exporters.excel_exporter import ExcelExporter
 from utils.credentials import (
-    save_profile, load_profile, list_profiles, delete_profile, CRYPTO_AVAILABLE
+    save_profile, load_profile, list_profiles, delete_profile
 )
-
 
 # ── Colores del tema ───────────────────────────────────────────────────────────
 CLR_BG         = "#0F1C2E"
@@ -43,7 +39,6 @@ CLR_DANGER     = "#F44336"
 CLR_TEXT       = "#E8F4FD"
 CLR_MUTED      = "#7BA7C2"
 CLR_HEADER_BG  = "#0D2B4E"
-
 
 class VMwareInventoryApp:
     def __init__(self):
@@ -363,13 +358,6 @@ class VMwareInventoryApp:
         self.tab_ds       = self._create_tab(self.notebook, "  Datastores  ")
         self.tab_nets     = self._create_tab(self.notebook, "  Redes  ")
         self.tab_log      = self._create_tab(self.notebook, "  Consola  ")
-        # ── PESTAÑA MULTI-CONEXIÓN (generada automáticamente) ──────────────
-        self.multi_tab = MultiScanTab(
-            self.notebook,
-            log_callback=self._log
-        )
-        self.notebook.add(self.multi_tab, text="  🌐 Multi-Conexión  ")
-        # ────────────────────────────────────────────────────────────────────
 
         # Treeviews
         self.tree_vms    = self._build_treeview(self.tab_vms)
