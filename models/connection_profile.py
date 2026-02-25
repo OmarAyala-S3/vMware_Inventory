@@ -11,11 +11,9 @@ def _short_uuid() -> str:
     """Genera un ID corto de 8 caracteres. Wrapper nombrado para evitar lambda."""
     return str(uuid.uuid4())[:8]
 
-
 class ConnectionType(Enum):
     VCENTER = "vCenter"
     ESXI = "ESXi Host"
-
 
 class ConnectionStatus(Enum):
     PENDING   = "Pendiente"
@@ -25,7 +23,6 @@ class ConnectionStatus(Enum):
     DONE      = "Completado"
     ERROR     = "Error"
     SKIPPED   = "Omitido"
-
 
 @dataclass
 class ConnectionProfile:
@@ -48,17 +45,72 @@ class ConnectionProfile:
     vms_found: int = 0
     hosts_found: int = 0
     datastores_found: int = 0
-    networks_found: int = 0
 
+    def __post_init__(self):
+        if not self.alias:
+            self.alias = self.host
+
+    @property
+    def display_name(self) -> str:
+        return f"[{self.connection_type.value}] {self.alias}"
+
+    @property
+    def is_ready(self) -> bool:
+        return self.status == ConnectionStatus.OK
+
+    @property
+    def has_error(self) -> bool:
+        return self.status == ConnectionStatus.ERROR
+
+    def reset_status(self):
+        self.status = ConnectionStatus.PENDING
+        self.error_message = ""
+        self.vms_found = 0
+        self.hosts_found = 0
+        self.datastores_found = 0
+
+    def to_dict(self) -> dict:
+        """Serialización para guardar perfiles (sin contraseña)"""
+        return {
+            "id": self.id,
+            "host": self.host,
+            "username": self.username,
+            "connection_type": self.connection_type.value,
+            "port": self.port,
+            "ignore_ssl": self.ignore_ssl,
+            "alias": self.alias,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict, password: str = "") -> "ConnectionProfile":
+        """Deserialización desde dict guardado"""
+        return cls(
+            host=data["host"],
+            username=data["username"],
+            password=password,
+            connection_type=ConnectionType(data.get("connection_type", "vCenter")),
+            port=data.get("port", 443),
+            ignore_ssl=data.get("ignore_ssl", True),
+            alias=data.get("alias", data["host"]),
+        )
 
 @dataclass
 class ScanConfig:
-    """Configuración para el escaneo multi-conexión."""
-    parallel: bool = False
-    max_workers: int = 3
-    timeout: int = 30
+    """
+    Configuración del modo de escaneo masivo.
+    """
+    parallel: bool = False               # True = paralelo, False = secuencial
+    max_workers: int = 3                 # Hilos máximos en modo paralelo
+    timeout: int = 30                    # Timeout por conexión (segundos)
+    retry_on_error: bool = False         # Reintentar conexiones fallidas
+    export_partial: bool = True          # Exportar aunque haya errores parciales
     include_vms: bool = True
     include_hosts: bool = True
     include_datastores: bool = True
     include_networks: bool = True
-    export_partial: bool = True
+
+    @property
+    def mode_label(self) -> str:
+        if self.parallel:
+            return f"Paralelo ({self.max_workers} workers)"
+        return "Secuencial"
