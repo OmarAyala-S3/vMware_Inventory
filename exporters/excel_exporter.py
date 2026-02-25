@@ -3,14 +3,12 @@ Exportador Excel con formato profesional - multi-hoja con colores y estilos
 """
 import os
 from datetime import datetime
-from typing import List, Optional, Callable
+from typing import Optional, Callable
 
 import pandas as pd
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
-
-from models.vm_model import VMModel, HostModel, DatastoreModel, NetworkModel
 
 C_HEADER_BG = "1E3A5F"
 C_HEADER_FG = "FFFFFF"
@@ -20,7 +18,6 @@ C_GREEN     = "D4EDDA"
 C_RED       = "F8D7DA"
 C_YELLOW    = "FFF3CD"
 
-
 def _apply_header(ws, row, num_cols):
     for col in range(1, num_cols + 1):
         cell = ws.cell(row=row, column=col)
@@ -29,13 +26,11 @@ def _apply_header(ws, row, num_cols):
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.row_dimensions[row].height = 28
 
-
 def _auto_width(ws):
     for col in ws.columns:
         col_letter = get_column_letter(col[0].column)
         max_len = max((len(str(c.value)) for c in col if c.value), default=8)
         ws.column_dimensions[col_letter].width = min(max_len + 3, 55)
-
 
 def _add_title(ws, title, num_cols, subtitle=""):
     ws.insert_rows(1)
@@ -55,7 +50,6 @@ def _add_title(ws, title, num_cols, subtitle=""):
         s.fill = PatternFill(fill_type="solid", fgColor=C_HEADER_BG)
         s.alignment = Alignment(horizontal="center", vertical="center")
         ws.row_dimensions[2].height = 15
-
 
 class ExcelExporter:
     def __init__(self, log_callback: Optional[Callable] = None):
