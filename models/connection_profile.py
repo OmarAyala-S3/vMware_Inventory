@@ -4,14 +4,11 @@ Modelo de perfil de conexión para gestión multi-vCenter/ESXi
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 import uuid
-
 
 class ConnectionType(Enum):
     VCENTER = "vCenter"
     ESXI = "ESXi Host"
-
 
 class ConnectionStatus(Enum):
     PENDING   = "Pendiente"
@@ -21,7 +18,6 @@ class ConnectionStatus(Enum):
     DONE      = "Completado"
     ERROR     = "Error"
     SKIPPED   = "Omitido"
-
 
 @dataclass
 class ConnectionProfile:
@@ -92,7 +88,6 @@ class ConnectionProfile:
             ignore_ssl=data.get("ignore_ssl", True),
             alias=data.get("alias", data["host"]),
         )
-
 
 @dataclass
 class ScanConfig:
