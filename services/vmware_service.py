@@ -59,8 +59,8 @@ class VMwareService:
             try:
                 Disconnect(self.service_instance)
                 self._log("[INFO] Desconectado.")
-            except Exception:
-                pass
+            except Exception as _e:
+                self._log(f"[DEBUG] Excepcion ignorada: {_e}")
             finally:
                 self.service_instance = None
                 self.content = None
@@ -188,8 +188,8 @@ class VMwareService:
                 elif hasattr(device.backing, "port"):
                     try:
                         nic.network = device.backing.port.portgroupKey or ""
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        self._log(f"[DEBUG] Excepcion ignorada: {_e}")
                 vm.nics.append(nic)
             elif isinstance(device, vim.vm.device.VirtualDisk):
                 disk = DiskInfo()
@@ -200,8 +200,8 @@ class VMwareService:
                 if hasattr(device.backing, "datastore") and device.backing.datastore:
                     try:
                         disk.datastore = device.backing.datastore.name
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        self._log(f"[DEBUG] Excepcion ignorada: {_e}")
                 vm.disks.append(disk)
 
         guest_net = self._prop(props, "guest.net", []) or []
@@ -267,14 +267,14 @@ class VMwareService:
         for ds_ref in (self._prop(props, "datastore", []) or []):
             try:
                 h.datastores.append(ds_ref.name)
-            except Exception:
-                pass
+            except Exception as _e:
+                self._log(f"[DEBUG] Excepcion ignorada: {_e}")
         parent = self._prop(props, "parent", None)
         if parent:
             try:
                 h.cluster = parent.name if hasattr(parent, "name") else "Standalone"
-            except Exception:
-                pass
+            except Exception as _e:
+                self._log(f"[DEBUG] Excepcion ignorada: {_e}")
         return h
 
     # ── Datastores ────────────────────────────────
@@ -303,8 +303,8 @@ class VMwareService:
             for hm in (self._prop(p, "host", []) or []):
                 try:
                     ds.hosts.append(hm.key.name)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    self._log(f"[DEBUG] Excepcion ignorada: {_e}")
             ds_list.append(ds)
         self._log(f"[OK] {len(ds_list)} Datastores procesados.")
         return ds_list
@@ -323,8 +323,8 @@ class VMwareService:
             for h in (self._prop(p, "host", []) or []):
                 try:
                     net.hosts.append(h.name)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    self._log(f"[DEBUG] Excepcion ignorada: {_e}")
             net.vms_count = len(self._prop(p, "vm", []) or [])
             networks.append(net)
         try:
@@ -339,16 +339,16 @@ class VMwareService:
                 if cfg and hasattr(cfg, "vlan"):
                     try:
                         net.vlan_id = str(cfg.vlan.vlanId)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        self._log(f"[DEBUG] Excepcion ignorada: {_e}")
                 for h in (self._prop(p, "host", []) or []):
                     try:
                         net.hosts.append(h.name)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        self._log(f"[DEBUG] Excepcion ignorada: {_e}")
                 net.vms_count = len(self._prop(p, "vm", []) or [])
                 networks.append(net)
-        except Exception:
-            pass
+        except Exception as _e:
+            self._log(f"[DEBUG] Excepcion ignorada: {_e}")
         self._log(f"[OK] {len(networks)} Redes procesadas.")
         return networks
