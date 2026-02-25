@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 
+
+def _short_uuid() -> str:
+    """Genera un ID corto de 8 caracteres. Wrapper nombrado para evitar lambda."""
+    return str(uuid.uuid4())[:8]
+
 class ConnectionType(Enum):
     VCENTER = "vCenter"
     ESXI = "ESXi Host"
@@ -34,7 +39,7 @@ class ConnectionProfile:
     alias: str = ""                          # Nombre amigable opcional
 
     # Campos de runtime (no se persisten)
-    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    id: str = field(default_factory=_short_uuid)
     status: ConnectionStatus = field(default=ConnectionStatus.PENDING)
     error_message: str = ""
     vms_found: int = 0
