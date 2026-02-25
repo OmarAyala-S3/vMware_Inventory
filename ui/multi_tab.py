@@ -7,8 +7,7 @@ Este módulo conecta:
   - MultiSourceExporter   (exportación consolidada)
 """
 import os
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import Tk, ttk, messagebox, filedialog, Text, Toplevel
 from typing import List
 
 from services.connection_manager import ConnectionManager, ConsolidatedResult
@@ -30,7 +29,7 @@ class MultiScanTab(ttk.Frame):
 
     def __init__(self, parent, log_callback=None, **kwargs):
         super().__init__(parent, **kwargs)
-        self._log_cb = log_callback or (lambda msg: print(msg))
+        self._log_cb = log_callback or print
         self._manager = ConnectionManager()
         self._last_result: ConsolidatedResult = None
         self._last_profiles: List[ConnectionProfile] = []
@@ -138,12 +137,12 @@ class MultiScanTab(ttk.Frame):
             return
 
         # Ventana de resumen
-        win = tk.Toplevel(self)
+        win = Toplevel(self)
         win.title("📊 Resumen del Escaneo")
         win.geometry("500x400")
         win.grab_set()
 
-        text = tk.Text(win, font=("Courier", 10), wrap="none")
+        text = Text(win, font=("Courier", 10), wrap="none")
         text.pack(fill="both", expand=True, padx=10, pady=10)
 
         vsb = ttk.Scrollbar(win, command=text.yview)
@@ -187,7 +186,7 @@ class MultiScanTab(ttk.Frame):
 # Para prueba standalone (sin la app completa)
 # ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = Tk()
     root.title("VMware Inventory — Multi-Conexión Test")
     root.geometry("1100x700")
 
