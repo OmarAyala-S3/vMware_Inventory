@@ -2,7 +2,6 @@
 Utilidades: credenciales seguras, perfiles, helpers
 """
 import json
-import hashlib
 import base64
 from pathlib import Path
 from typing import Optional, Dict
@@ -77,8 +76,8 @@ def verify_password(password: str, stored_hash: str) -> bool:
             return _hmac.compare_digest(dk_act, dk_exp)
         if BCRYPT_AVAILABLE:
             return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
-    except Exception:
-        pass
+    except Exception as _e:
+        pass  # Error de verificacion — hash invalido o incompatible
     return False
 
 def save_profile(name: str, host: str, user: str, password: str,
