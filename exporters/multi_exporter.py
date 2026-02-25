@@ -601,8 +601,8 @@ class MultiSourceExporter:
                 try:
                     if cell.value:
                         max_len = max(max_len, len(str(cell.value)))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("Excepcion ignorada: %s", _e)
             ws.column_dimensions[col_letter].width = min(max_len + 4, max_width)
 
     # ─────────────────────────────────────────────
